@@ -17,8 +17,9 @@ OpenPlace is a collaborative pixel art platform inspired by [r/place](https://ww
 
 ## Screenshots
 
-[Screenshot of the export page](https://i.imgur.com/aYwvm7q.png)
-[Export of the no limits canvas](https://i.imgur.com/G9Y0awl.png)
+![Screenshot of the explore page](https://github.com/user-attachments/assets/69bddd32-72e5-44a2-b123-c68126d45c71)
+
+![Export of the no limits canvas](https://github.com/user-attachments/assets/e68ef34d-3fcf-4e4e-964f-1b11cd132df6)
 
 ---
 
