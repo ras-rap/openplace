@@ -84,6 +84,8 @@ const DEFAULT_COLORS = [
   "#820080",
 ];
 
+
+
 export default function Canvas() {
   const router = useRouter();
   const { id } = router.query;
@@ -130,8 +132,18 @@ export default function Canvas() {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showZoomControls, setShowZoomControls] = useState(false);
 
+  // Chat states
+  const [chatMessages, setChatMessages] = useState<
+    { userId: string; username?: string; text: string; timestamp: number }[]
+  >([]);
+  const [chatInput, setChatInput] = useState("");
+  const [showChat, setShowChat] = useState(false);
+  const chatInputRef = useRef<HTMLInputElement>(null);
+  const [hasNewChat, setHasNewChat] = useState(false);
+  const chatMessagesRef = useRef<HTMLDivElement>(null);
+
   // WebSocket connection - this provides userCount
-  const { isConnected, lastMessage, userCount } = useWebSocket(
+  const { isConnected, lastMessage, userCount, sendMessage } = useWebSocket(
     typeof id === "string" ? id : "",
     user?.name || user?.$id || "anonymous"
   );
@@ -221,8 +233,30 @@ export default function Canvas() {
       case "user_count_update":
         // userCount is already handled by the useWebSocket hook
         break;
+      case "chat_message":
+        setChatMessages((prev) => [
+          ...prev.slice(-49),
+          lastMessage.data,
+        ]);
+        if (!showChat) setHasNewChat(true); // <--- Add this line
+        break;
     }
-  }, [lastMessage]);
+  }, [lastMessage, showChat]);
+
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    const container = chatMessagesRef.current;
+    if (!container) return;
+
+    // Only auto-scroll if user is near the bottom (or just opened chat)
+    const isNearBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight < 60;
+
+    if (isNearBottom || chatMessages.length <= 2 || showChat) {
+      // Scroll to bottom
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [chatMessages, showChat]);
 
   // Cooldown timer
   useEffect(() => {
@@ -793,10 +827,17 @@ export default function Canvas() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // If focus is on an input or textarea, ignore shortcuts
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) {
+        return;
+      }
+
       if (e.key === "Escape") {
         setShowNavbar(false);
         setShowColorPicker(false);
         setShowZoomControls(false);
+        setShowChat(false);
       }
       if (e.key === "m" || e.key === "M") {
         setShowNavbar((v) => !v);
@@ -806,6 +847,11 @@ export default function Canvas() {
       }
       if (e.key === "z" || e.key === "Z") {
         setShowZoomControls((v) => !v);
+      }
+      if (e.key === "t" || e.key === "T") {
+        setShowChat((v) => !v);
+        setTimeout(() => chatInputRef.current?.focus(), 200);
+        setHasNewChat(false);
       }
     };
 
@@ -833,6 +879,20 @@ export default function Canvas() {
     if (canvasConfig.showPixelAuthors === "admins" && isAdmin) return true;
     return false;
   }
+
+  // --- Chat send function ---
+  const sendChat = useCallback(() => {
+    if (!chatInput.trim()) return;
+    sendMessage({
+      type: "chat_message",
+      canvasId: canvasConfig?.id,
+      userId: user?.$id || "anonymous",
+      username: user?.name || "anonymous",
+      text: chatInput.trim(),
+      timestamp: Date.now(),
+    });
+    setChatInput("");
+  }, [chatInput, sendMessage, user]);
 
   // --- UI rendering ---
 
@@ -1252,7 +1312,96 @@ export default function Canvas() {
           <div>Pinch: Zoom</div>
           <div>Two-finger drag: Pan</div>
           <div>M/C/Z: Toggle panels</div>
+          <div>T: Chat</div>
+          <div>Esc: Close all panels</div>
         </div>
+        {/* Chat Panel */}
+<div
+  className={`fixed bottom-2 right-2 z-50 w-[90vw] max-w-sm sm:max-w-md transition-all duration-300 ${
+    showChat ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+  }`}
+>
+  <div className="bg-white/95 dark:bg-gray-900/95 border border-gray-300 dark:border-gray-700 rounded-xl shadow-2xl flex flex-col h-72">
+    <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+      <span className="font-semibold text-sm">Live Chat</span>
+      <button
+        className="text-gray-500 hover:text-red-500"
+        onClick={() => setShowChat(false)}
+        aria-label="Close chat"
+      >
+        <X className="h-5 w-5" />
+      </button>
+    </div>
+    <div
+  ref={chatMessagesRef}
+  className="flex-1 overflow-y-auto px-3 py-2 space-y-1 text-xs"
+>
+      {chatMessages.length === 0 && (
+        <div className="text-gray-400 text-center mt-8">No messages yet.</div>
+      )}
+      {chatMessages.map((msg, i) => (
+        <div key={i} className="flex items-start gap-2">
+          <span className="font-bold text-blue-600 dark:text-blue-300">
+            {msg.username || "anonymous"}:
+          </span>
+          <span className="break-words">{msg.text}</span>
+        </div>
+      ))}
+    </div>
+    <form
+      className="flex items-center border-t border-gray-200 dark:border-gray-700 px-2 py-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        sendChat();
+      }}
+    >
+      <input
+        ref={chatInputRef}
+        type="text"
+        className="flex-1 rounded-lg border border-gray-300 dark:border-gray-700 px-2 py-1 text-sm bg-white dark:bg-gray-800 focus:outline-none"
+        placeholder="Type a message…"
+        value={chatInput}
+        onChange={(e) => setChatInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendChat();
+          }
+        }}
+        maxLength={300}
+        autoComplete="off"
+      />
+      <button
+        type="submit"
+        className="ml-2 px-3 py-1 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition"
+        disabled={!chatInput.trim()}
+        tabIndex={0}
+      >
+        Send
+      </button>
+    </form>
+  </div>
+</div>
+
+{/* Chat Toggle Button */}
+<Button
+  variant="outline"
+  size={isMobile ? "icon" : "sm"}
+  className="fixed bottom-2 right-20 z-50 bg-white/90 backdrop-blur-sm border-2 border-gray-300 shadow-lg hover:bg-white hover:shadow-xl transition-all duration-200 dark:bg-gray-900/90 dark:border-gray-600 dark:hover:bg-gray-900"
+  onClick={() => {
+    setShowChat((v) => !v);
+    setHasNewChat(false);
+    setTimeout(() => chatInputRef.current?.focus(), 200);
+  }}
+>
+  <div className="relative">
+    <Users className="h-4 w-4" />
+    {hasNewChat && (
+      <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 border-2 border-white dark:border-gray-900" />
+    )}
+  </div>
+  <span className="ml-2 hidden sm:inline">Chat</span>
+</Button>
       </div>
     </>
   );

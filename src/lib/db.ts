@@ -1,7 +1,21 @@
 import mysql from "mysql2/promise";
+import os from "os";
+
+// --- Get the first non-internal IPv4 address ---
+function getLocalIPv4() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]!) {
+      if (iface.family === "IPv4" && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return "localhost"; // fallback
+}
 
 const dbConfig = {
-  host: process.env.DB_HOST || "localhost",
+  host: process.env.DB_HOST || getLocalIPv4(),
   user: process.env.DB_USER || "root",
   password: process.env.DB_PASSWORD || "",
   database: process.env.DB_NAME || "openplace",
@@ -163,7 +177,7 @@ export async function placePixel(
     user: userId,
     username,
   };
-  await fetch("http://localhost:3001/broadcast-pixel", {
+  await fetch(`http://${getLocalIPv4()}:3001/broadcast-pixel`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
