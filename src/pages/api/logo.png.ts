@@ -39,5 +39,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   res.setHeader("Content-Type", "image/png");
   res.setHeader("Cache-Control", "public, max-age=60"); // cache for 1 minute
-  c.pngStream().pipe(res as any);
+  const buffer = c.toBuffer("image/png");
+  res.send(buffer);
 }

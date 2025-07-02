@@ -9,7 +9,7 @@ interface AuthContextType {
   user: AuthUser;
   loading: boolean;
   isAdmin: boolean;
-  loginWithProvider: (provider: string) => void;
+  loginWithProvider: (provider: import("appwrite").OAuthProvider) => void;
   loginAnonymously: () => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   };
 
-  const loginWithProvider = (provider: string) => {
+  const loginWithProvider = (provider: import("appwrite").OAuthProvider) => {
     const redirect = window.location.origin + "/auth-callback";
     account.createOAuth2Session(provider, redirect, redirect);
   };
@@ -106,3 +106,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
+export type OAuthProvider = "discord" | "github";

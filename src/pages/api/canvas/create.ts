@@ -73,6 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       allowedColors: allowedColors || undefined,
       createdBy,
       showPixelAuthors: showPixelAuthors === "everyone" ? "everyone" : "admins",
+      authMode: "anyone", // or set based on your requirements
     });
 
     res.status(201).json({ canvasId });

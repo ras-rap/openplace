@@ -543,7 +543,7 @@ export default function Canvas() {
     if (!canvasConfig) return;
     if (e.touches.length === 1) {
       setTouchState({
-        lastTouches: e.touches,
+        lastTouches: e.touches as unknown as TouchList,
         lastPan: { x: e.touches[0].clientX, y: e.touches[0].clientY },
         lastScale: null,
         mode: "draw",
@@ -556,9 +556,9 @@ export default function Canvas() {
       );
     } else if (e.touches.length === 2) {
       setTouchState({
-        lastTouches: e.touches,
+        lastTouches: e.touches as unknown as TouchList,
         lastPan: null,
-        lastScale: getTouchDistance(e.touches),
+        lastScale: getTouchDistance(e.touches as unknown as TouchList),
         mode: "zoom",
         startX: 0,
         startY: 0,
@@ -585,7 +585,7 @@ export default function Canvas() {
       );
     } else if (touchState.mode === "zoom" && e.touches.length === 2) {
       // Pinch to zoom
-      const newDist = getTouchDistance(e.touches);
+      const newDist = getTouchDistance(e.touches as unknown as TouchList);
       if (touchState.lastScale && newDist) {
         const scaleDelta = newDist / touchState.lastScale;
         const newScale = Math.max(
@@ -626,7 +626,7 @@ export default function Canvas() {
         }));
         setTouchState((prev) => ({
           ...prev,
-          lastTouches: e.touches,
+          lastTouches: e.touches as unknown as TouchList,
         }));
       }
     }

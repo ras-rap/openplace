@@ -17,4 +17,6 @@ const ws = Bun.spawn(wsCmd, {
   stderr: "inherit",
 });
 
+export{}
+
 await Promise.all([next.exited, ws.exited]);

@@ -278,14 +278,14 @@ serve({
   },
 
   websocket: {
-    open(ws) {
+    open(ws: any) {
       ws.isAlive = true;
       ws.lastPong = Date.now();
-
+    
       if (isDev) console.log("🔗 WebSocket connection opened");
-
+    
       // Auto-join if canvasId is present
-      if (ws.data?.canvasId) {
+      if ((ws.data as { canvasId?: string })?.canvasId) {
         handleWebSocketMessage(
           ws,
           JSON.stringify({
@@ -307,11 +307,6 @@ serve({
 
     close(ws, code, reason) {
       if (isDev) console.log(`🔌 WebSocket connection closed: ${code} ${reason}`);
-      removeClient(ws);
-    },
-
-    error(ws, error) {
-      console.error("❌ WebSocket error:", error);
       removeClient(ws);
     },
   },

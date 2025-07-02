@@ -177,7 +177,9 @@ export default function ExplorePage() {
                         <Eye className="h-5 w-5 text-blue-500" />
                         <span>{canvas.name}</span>
                         {canvas.pinned && (
-                          <Pin className="h-4 w-4 text-yellow-500" title="Pinned" />
+                          <Pin className="h-4 w-4 text-yellow-500">
+                            <title>Pinned</title>
+                          </Pin>
                         )}
                       </CardTitle>
                       <CardDescription>

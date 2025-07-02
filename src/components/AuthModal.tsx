@@ -9,6 +9,7 @@ import {
   IconLoader2,
 } from "@tabler/icons-react";
 import React, { useState } from "react";
+import { OAuthProvider } from "appwrite";
 
 export default function AuthModal({ forceOpen = false }: { forceOpen?: boolean }) {
   const {
@@ -37,6 +38,7 @@ export default function AuthModal({ forceOpen = false }: { forceOpen?: boolean }
       return;
     }
     setGuestError("");
+    // @ts-ignore
     await loginAnonymously(guestName.trim());
     setShowGuestForm(false);
   };
@@ -108,14 +110,14 @@ export default function AuthModal({ forceOpen = false }: { forceOpen?: boolean }
               <Button
                 className="w-full flex items-center justify-center gap-2"
                 variant="outline"
-                onClick={() => loginWithProvider("discord")}
+                onClick={() => loginWithProvider("discord" as OAuthProvider)}
               >
                 <IconBrandDiscord className="h-5 w-5" /> Sign in with Discord
               </Button>
               <Button
                 className="w-full flex items-center justify-center gap-2"
                 variant="outline"
-                onClick={() => loginWithProvider("github")}
+                onClick={() => loginWithProvider("github" as OAuthProvider)}
               >
                 <IconBrandGithub className="h-5 w-5" /> Sign in with GitHub
               </Button>
