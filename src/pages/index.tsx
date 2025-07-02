@@ -1,22 +1,21 @@
-// pages/index.tsx
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
-import { ThemeToggle } from "@/components/theme-toggle"; // Import the ThemeToggle as a named export
+import { ThemeToggle } from "@/components/theme-toggle";
 import Head from "next/head";
 import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
+import { useState } from "react";
+import { Menu, X } from "lucide-react";
 
 export default function Home() {
+  const { user, setShowAuthModal } = useAuth();
+  const [navOpen, setNavOpen] = useState(false);
+
   return (
     <>
       <Head>
@@ -25,169 +24,144 @@ export default function Home() {
           name="description"
           content="Host and join custom pixel art canvases. Your rules, your art, together."
         />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" href="/api/logo.png" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      <div className="flex min-h-screen flex-col items-center justify-between">
+      <div className="flex min-h-screen flex-col bg-background">
         {/* Navbar */}
-        <header className="container sticky top-0 z-40 mx-auto w-full border-b bg-background/80 py-4 backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="text-2xl font-bold tracking-tight text-blue-600">
+        <header className="sticky top-0 z-40 w-full border-b bg-background/90 backdrop-blur-sm">
+          <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
+            <Link
+              href="/"
+              className="text-xl font-bold tracking-tight text-blue-600"
+            >
               OpenPlace
             </Link>
-            <nav className="flex items-center space-x-4">
+            {/* Desktop nav */}
+            <nav className="hidden gap-2 sm:flex items-center">
               <Button variant="ghost" asChild>
-                <Link href="/canvases">Explore Canvases</Link>
+                <Link href="/explore">Explore</Link>
               </Button>
-              <Button variant="ghost" asChild>
-                <Link href="/about">About</Link>
+              <Button onClick={() => setShowAuthModal(true)}>
+                {user ? "Account" : "Sign In / Register"}
               </Button>
-              {/* This will be replaced with actual auth state later */}
-              <Button asChild>
-                <Link href="#auth">Sign In / Register</Link>
-              </Button>
-              <ThemeToggle /> {/* Add the ThemeToggle here */}
+              <ThemeToggle />
             </nav>
+            {/* Mobile nav toggle */}
+            <button
+              className="sm:hidden p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+              onClick={() => setNavOpen((v) => !v)}
+              aria-label="Open navigation"
+            >
+              {navOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
           </div>
+          {/* Mobile nav menu */}
+          {navOpen && (
+            <nav className="sm:hidden flex flex-col gap-1 px-4 pb-4 bg-background border-b">
+              <Button
+                variant="ghost"
+                asChild
+                className="justify-start"
+                onClick={() => setNavOpen(false)}
+              >
+                <Link href="/explore">Explore</Link>
+              </Button>
+              <Button
+                className="justify-start"
+                onClick={() => {
+                  setShowAuthModal(true);
+                  setNavOpen(false);
+                }}
+              >
+                {user ? "Account" : "Sign In / Register"}
+              </Button>
+              <div className="flex justify-start">
+                <ThemeToggle />
+              </div>
+            </nav>
+          )}
         </header>
 
         {/* Hero Section */}
-        <section className="relative flex min-h-[calc(100vh-6rem)] w-full flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 py-20 text-center dark:from-gray-950 dark:to-blue-950">
-          <div className="relative z-10 mx-auto max-w-4xl px-4">
-            <h1 className="text-5xl font-extrabold leading-tight tracking-tighter text-gray-900 md:text-7xl dark:text-gray-50">
+        <section className="flex flex-1 flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-950 dark:to-blue-950 px-2 py-10 sm:py-20 text-center">
+          <div className="w-full max-w-2xl mx-auto">
+            <h1 className="text-3xl sm:text-5xl font-extrabold leading-tight tracking-tight text-gray-900 dark:text-gray-50">
               Your Pixels, Your Rules,{" "}
               <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 Unlimited Canvases
               </span>
             </h1>
-            <p className="mt-6 text-xl text-gray-700 md:text-2xl dark:text-gray-300">
+            <p className="mt-4 text-base sm:text-xl text-gray-700 dark:text-gray-300">
               OpenPlace empowers you to host collaborative pixel art experiences
               with full control over size, rules, and community.
             </p>
-            <div className="mt-10 flex flex-col justify-center space-y-4 sm:flex-row sm:space-x-4 sm:space-y-0">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center sm:gap-4">
               <Link href="/create-canvas" passHref>
-                <Button size="lg" className="px-8 py-3 text-lg">
+                <Button
+                  size="lg"
+                  className="w-full sm:w-auto px-6 py-3 text-base sm:text-lg"
+                >
                   Start Your Canvas
                 </Button>
               </Link>
-              <Link href="/canvases" passHref>
-                <Button size="lg" variant="outline" className="px-8 py-3 text-lg">
+              <Link href="/explore" passHref>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full sm:w-auto px-6 py-3 text-base sm:text-lg"
+                >
                   Explore Live Canvases
                 </Button>
               </Link>
             </div>
           </div>
-          {/* Subtle background animation/shapes could go here */}
         </section>
 
-        {/* Feature Section 1 */}
-        <section className="container mx-auto my-20 px-4 text-center">
-          <h2 className="text-4xl font-bold tracking-tight md:text-5xl">
-            Unleash Your Creativity
-          </h2>
-          <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
-            OpenPlace is designed for flexibility and control.
+        {/* Feature Section */}
+        <section className="w-full py-12 bg-background">
+  <div className="max-w-4xl mx-auto px-4">
+    <h2 className="text-center text-3xl sm:text-4xl font-extrabold mb-2">
+      Unleash Your Creativity
+    </h2>
+    <p className="text-center text-base sm:text-lg text-gray-600 dark:text-gray-400 mb-8">
+      OpenPlace is designed for flexibility and control.
+    </p>
+    <div className="flex flex-col gap-6 sm:flex-row sm:gap-6">
+      <div className="flex-1">
+        <div className="rounded-xl bg-card shadow-lg p-6 flex flex-col items-center text-center h-full">
+          <h3 className="text-xl font-bold mb-2">Custom Canvas Sizes</h3>
+          <p className="text-gray-600 dark:text-gray-400 text-sm">
+            From a tiny stamp to a massive mural, define your canvas dimensions precisely.
           </p>
-
-          <div className="mt-12 grid grid-cols-1 gap-8 md:grid-cols-3">
-            <Card className="flex flex-col items-center p-6 text-center shadow-lg transition-transform duration-300 hover:scale-[1.02]">
-              <CardHeader>
-                <CardTitle className="text-2xl font-semibold">Custom Canvas Sizes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 dark:text-gray-400">
-                  From a tiny stamp to a massive mural, define your canvas dimensions precisely.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="flex flex-col items-center p-6 text-center shadow-lg transition-transform duration-300 hover:scale-[1.02]">
-              <CardHeader>
-                <CardTitle className="text-2xl font-semibold">Granular Control</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Set custom rate limits, open/close times, and even moderation features.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="flex flex-col items-center p-6 text-center shadow-lg transition-transform duration-300 hover:scale-[1.02]">
-              <CardHeader>
-                <CardTitle className="text-2xl font-semibold">See Every Pixel</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Track who placed which pixel with detailed history for transparency.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-
-        {/* Call to Action / Login Section */}
-        <section
-          id="auth"
-          className="container mx-auto my-20 flex flex-col items-center justify-center px-4"
-        >
-          <Card className="w-full max-w-md p-6 shadow-xl dark:border-gray-800">
-            <CardHeader className="text-center">
-              <CardTitle className="text-3xl font-bold">Get Started</CardTitle>
-              <CardDescription>
-                Log in or create an account to unlock your canvas.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="login" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="login">Login</TabsTrigger>
-                  <TabsTrigger value="signup">Sign Up</TabsTrigger>
-                </TabsList>
-                <TabsContent value="login" className="py-4">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="email-login">Email</Label>
-                      <Input id="email-login" type="email" placeholder="email@example.com" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="password-login">Password</Label>
-                      <Input id="password-login" type="password" />
-                    </div>
-                    <Button className="w-full">Login</Button>
-                    <div className="text-center text-sm text-gray-500">
-                      <a href="#" className="underline hover:text-gray-700">
-                        Forgot password?
-                      </a>
-                    </div>
-                  </div>
-                </TabsContent>
-                <TabsContent value="signup" className="py-4">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="username-signup">Username</Label>
-                      <Input id="username-signup" placeholder="your_username" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email-signup">Email</Label>
-                      <Input id="email-signup" type="email" placeholder="email@example.com" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="password-signup">Password</Label>
-                      <Input id="password-signup" type="password" />
-                    </div>
-                    <Button className="w-full">Sign Up</Button>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        </section>
+        </div>
+      </div>
+      <div className="flex-1">
+        <div className="rounded-xl bg-card shadow-lg p-6 flex flex-col items-center text-center h-full">
+          <h3 className="text-xl font-bold mb-2">Granular Control</h3>
+          <p className="text-gray-600 dark:text-gray-400 text-sm">
+            Set custom rate limits, open/close times, and even moderation features.
+          </p>
+        </div>
+      </div>
+      <div className="flex-1">
+        <div className="rounded-xl bg-card shadow-lg p-6 flex flex-col items-center text-center h-full">
+          <h3 className="text-xl font-bold mb-2">See Every Pixel</h3>
+          <p className="text-gray-600 dark:text-gray-400 text-sm">
+            Track who placed which pixel with detailed history for transparency.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
 
         {/* Footer */}
-        <footer className="w-full border-t py-8 text-center text-sm text-gray-600 dark:text-gray-400">
+        <footer className="w-full border-t py-6 text-center text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-auto">
           <div className="container mx-auto">
             <p>&copy; {new Date().getFullYear()} OpenPlace. All rights reserved.</p>
-            <div className="mt-2 space-x-4">
+            <div className="mt-2 space-x-2 sm:space-x-4">
               <Link href="/privacy" className="hover:underline">
                 Privacy Policy
               </Link>

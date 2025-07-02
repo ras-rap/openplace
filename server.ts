@@ -1,309 +1,327 @@
-// server.ts (fixed version)
-import { createServer } from 'http';
-import { parse } from 'url';
-import next from 'next';
-import { WebSocketServer, WebSocket } from 'ws';
-import { IncomingMessage } from 'http';
-import chokidar from 'chokidar';
+import { serve } from "bun";
 
-const dev = process.argv.includes('--dev') || process.env.NODE_ENV !== 'production';
-const hostname = process.env.HOSTNAME || 'localhost';
-const port = parseInt(process.env.PORT || '3000');
+// --- Parse dev mode flag ---
+const isDev = Bun.argv.includes("--dev") || Bun.argv.includes("dev");
 
-// Initialize Next.js
-const app = next({ dev, hostname, port });
-const handle = app.getRequestHandler();
+// --- Config ---
+const port = Number(process.env.PORT) || 3001;
+const hostname = process.env.HOSTNAME || "0.0.0.0";
 
-interface ExtendedWebSocket extends WebSocket {
-  canvasId?: string;
-  userId?: string;
-  isAlive?: boolean;
+// --- In-memory store for WebSocket connections ---
+const canvasConnections = new Map<string, Set<any>>();
+
+// --- Heartbeat system ---
+const heartbeatInterval = 30000; // 30 seconds
+const heartbeatTimeout = 10000; // 10 seconds
+
+// --- WebSocket message handler ---
+function handleWebSocketMessage(ws: any, message: any) {
+  try {
+    const data = JSON.parse(message);
+    if (isDev) console.log("📨 WebSocket message:", data);
+
+    switch (data.type) {
+      case "join_canvas": {
+        const { canvasId, userId } = data;
+        ws.canvasId = canvasId;
+        ws.userId = userId;
+        ws.isAlive = true;
+        ws.lastPong = Date.now();
+
+        if (!canvasConnections.has(canvasId)) {
+          canvasConnections.set(canvasId, new Set());
+        }
+        canvasConnections.get(canvasId)!.add(ws);
+
+        const clientCount = canvasConnections.get(canvasId)!.size;
+        if (isDev)
+          console.log(
+            `🔗 Client joined canvas ${canvasId} (${clientCount} total)`
+          );
+
+        // Send welcome message
+        ws.send(
+          JSON.stringify({
+            type: "connected",
+            data: { canvasId, userId, connectedUsers: clientCount },
+          })
+        );
+
+        // Broadcast user count update
+        broadcastToCanvas(canvasId, {
+          type: "user_count_update",
+          data: { count: clientCount },
+        });
+        break;
+      }
+
+      case "ping":
+        ws.isAlive = true;
+        ws.lastPong = Date.now();
+        ws.send(JSON.stringify({ type: "pong", timestamp: Date.now() }));
+        break;
+
+      case "pong":
+        ws.isAlive = true;
+        ws.lastPong = Date.now();
+        break;
+
+      case "pixel_placed":
+        // Handle pixel placement if needed
+        break;
+
+      default:
+        if (isDev) console.log("Unknown message type:", data.type);
+    }
+  } catch (error) {
+    console.error("❌ Error handling WebSocket message:", error);
+    // Don't close connection on parse errors, just log them
+  }
 }
 
-class CanvasWebSocketServer {
-  private wss: WebSocketServer;
-  private clients: Map<string, Set<ExtendedWebSocket>> = new Map();
-  private heartbeatInterval: NodeJS.Timeout;
+// --- Broadcast to all clients in a canvas ---
+function broadcastToCanvas(canvasId: string, message: any, excludeWs?: any) {
+  const connections = canvasConnections.get(canvasId);
+  if (!connections) return;
 
-  constructor(server: any) {
-    // Create WebSocket server with simpler configuration
-    this.wss = new WebSocketServer({ 
-      server,
-      path: '/ws'
-    });
+  const messageStr = JSON.stringify(message);
+  let successCount = 0;
+  const deadConnections: any[] = [];
 
-    this.wss.on('connection', this.handleConnection.bind(this));
-    
-    // Setup heartbeat to detect broken connections
-    this.heartbeatInterval = setInterval(() => {
-      this.wss.clients.forEach((ws: ExtendedWebSocket) => {
-        if (ws.isAlive === false) {
-          this.removeClient(ws);
-          return ws.terminate();
+  connections.forEach((ws) => {
+    if (ws !== excludeWs) {
+      if (ws.readyState === 1) {
+        // 1 = OPEN
+        try {
+          ws.send(messageStr);
+          successCount++;
+        } catch (error) {
+          console.error("❌ Error broadcasting to client:", error);
+          deadConnections.push(ws);
         }
-        
-        ws.isAlive = false;
-        ws.ping();
-      });
-    }, 30000);
-
-    console.log('✅ WebSocket server initialized');
-  }
-
-  private handleConnection(ws: ExtendedWebSocket, req: IncomingMessage) {
-    const { query } = parse(req.url || '', true);
-    const canvasId = query.canvasId as string;
-    const userId = query.userId as string || 'anonymous';
-
-    console.log('🔗 WebSocket connection attempt:', { canvasId, userId, url: req.url });
-
-    if (!canvasId) {
-      console.log('❌ No canvas ID provided, closing connection');
-      ws.close(1008, 'Canvas ID required');
-      return;
-    }
-
-    ws.canvasId = canvasId;
-    ws.userId = userId;
-    ws.isAlive = true;
-
-    // Handle pong responses for heartbeat
-    ws.on('pong', () => {
-      ws.isAlive = true;
-    });
-
-    // Add to canvas room
-    if (!this.clients.has(canvasId)) {
-      this.clients.set(canvasId, new Set());
-    }
-    this.clients.get(canvasId)!.add(ws);
-
-    console.log(`🔗 Client connected to canvas ${canvasId} (${this.clients.get(canvasId)!.size} total)`);
-
-    // Send welcome message
-    ws.send(JSON.stringify({
-      type: 'connected',
-      data: { 
-        canvasId, 
-        userId,
-        connectedUsers: this.clients.get(canvasId)!.size
-      }
-    }));
-
-    // Broadcast user count update to all clients in the canvas
-    this.broadcast(canvasId, {
-      type: 'user_count_update',
-      data: { count: this.clients.get(canvasId)!.size }
-    }, ws);
-
-    ws.on('message', (data) => {
-      try {
-        const message = JSON.parse(data.toString());
-        this.handleMessage(ws, message);
-      } catch (error) {
-        console.error('❌ Invalid message format:', error);
-      }
-    });
-
-    ws.on('close', (code, reason) => {
-      console.log(`🔌 WebSocket closed: ${code} ${reason}`);
-      this.removeClient(ws);
-    });
-
-    ws.on('error', (error) => {
-      console.error('❌ WebSocket error:', error);
-      this.removeClient(ws);
-    });
-  }
-
-  private removeClient(ws: ExtendedWebSocket) {
-    if (ws.canvasId && this.clients.has(ws.canvasId)) {
-      this.clients.get(ws.canvasId)!.delete(ws);
-      const remainingClients = this.clients.get(ws.canvasId)!.size;
-      
-      if (remainingClients === 0) {
-        this.clients.delete(ws.canvasId);
       } else {
+        // Connection is not open, mark for removal
+        deadConnections.push(ws);
+      }
+    }
+  });
+
+  // Clean up dead connections
+  deadConnections.forEach((ws) => {
+    connections.delete(ws);
+    if (isDev) console.log("🧹 Cleaned up dead connection");
+  });
+
+  if (isDev && successCount > 0)
+    console.log(
+      `📡 Broadcasted ${message.type} to ${successCount} clients in canvas ${canvasId}`
+    );
+}
+
+// --- Remove client from canvas on disconnect ---
+function removeClient(ws: any) {
+  if (ws.canvasId && canvasConnections.has(ws.canvasId)) {
+    const connections = canvasConnections.get(ws.canvasId)!;
+    connections.delete(ws);
+    const remainingClients = connections.size;
+
+    if (remainingClients === 0) {
+      canvasConnections.delete(ws.canvasId);
+      if (isDev) console.log(`🗑️ Removed empty canvas ${ws.canvasId}`);
+    } else {
+      broadcastToCanvas(ws.canvasId, {
+        type: "user_count_update",
+        data: { count: remainingClients },
+      });
+    }
+
+    if (isDev)
+      console.log(
+        `🔌 Client disconnected from canvas ${ws.canvasId} (${remainingClients} remaining)`
+      );
+  }
+}
+
+// --- Heartbeat system to detect dead connections ---
+function startHeartbeat() {
+  setInterval(() => {
+    const now = Date.now();
+    let totalConnections = 0;
+    let deadConnections = 0;
+
+    canvasConnections.forEach((connections, canvasId) => {
+      const deadWs: any[] = [];
+
+      connections.forEach((ws) => {
+        totalConnections++;
+
+        if (ws.readyState !== 1) {
+          // Connection is not open
+          deadWs.push(ws);
+          return;
+        }
+
+        // Check if client responded to last ping
+        if (ws.lastPong && now - ws.lastPong > heartbeatInterval + heartbeatTimeout) {
+          if (isDev) console.log("💀 Client failed heartbeat check");
+          deadWs.push(ws);
+          return;
+        }
+
+        // Send ping
+        try {
+          ws.send(JSON.stringify({ type: "ping", timestamp: now }));
+          ws.isAlive = false; // Will be set to true when pong is received
+        } catch (error) {
+          console.error("❌ Error sending ping:", error);
+          deadWs.push(ws);
+        }
+      });
+
+      // Remove dead connections
+      deadWs.forEach((ws) => {
+        connections.delete(ws);
+        deadConnections++;
+        try {
+          ws.close();
+        } catch (e) {
+          // Ignore errors when closing dead connections
+        }
+      });
+
+      // Clean up empty canvas
+      if (connections.size === 0) {
+        canvasConnections.delete(canvasId);
+      } else if (deadWs.length > 0) {
         // Broadcast updated user count
-        this.broadcast(ws.canvasId, {
-          type: 'user_count_update',
-          data: { count: remainingClients }
+        broadcastToCanvas(canvasId, {
+          type: "user_count_update",
+          data: { count: connections.size },
         });
       }
-      
-      console.log(`🔌 Client disconnected from canvas ${ws.canvasId} (${remainingClients} remaining)`);
-    }
-  }
-
-  private handleMessage(ws: ExtendedWebSocket, message: any) {
-    switch (message.type) {
-      case 'ping':
-        ws.send(JSON.stringify({ type: 'pong' }));
-        break;
-      case 'cursor_move':
-        // Broadcast cursor position to other users in the same canvas
-        if (ws.canvasId) {
-          this.broadcast(ws.canvasId, {
-            type: 'cursor_update',
-            data: {
-              userId: ws.userId,
-              x: message.data.x,
-              y: message.data.y
-            }
-          }, ws);
-        }
-        break;
-      default:
-        console.log('❓ Unknown message type:', message.type);
-    }
-  }
-
-  public broadcast(canvasId: string, message: any, excludeWs?: ExtendedWebSocket) {
-    const canvasClients = this.clients.get(canvasId);
-    if (!canvasClients) return;
-
-    const messageStr = JSON.stringify(message);
-    canvasClients.forEach(client => {
-      if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
-        try {
-          client.send(messageStr);
-        } catch (error) {
-          console.error('❌ Error sending message to client:', error);
-          this.removeClient(client);
-        }
-      }
-    });
-  }
-
-  public getClientCount(canvasId: string): number {
-    return this.clients.get(canvasId)?.size || 0;
-  }
-
-  public getAllStats() {
-    const stats = {
-      totalCanvases: this.clients.size,
-      totalUsers: 0,
-      canvases: {} as Record<string, number>
-    };
-
-    this.clients.forEach((clients, canvasId) => {
-      const count = clients.size;
-      stats.canvases[canvasId] = count;
-      stats.totalUsers += count;
     });
 
-    return stats;
-  }
-
-  public close() {
-    clearInterval(this.heartbeatInterval);
-    this.wss.close();
-  }
+    if (isDev && (totalConnections > 0 || deadConnections > 0)) {
+      console.log(
+        `💓 Heartbeat: ${totalConnections} total, ${deadConnections} cleaned up`
+      );
+    }
+  }, heartbeatInterval);
 }
 
-let wsServer: CanvasWebSocketServer | null = null;
+// --- Export for API routes (e.g. pixel placement) ---
+export { broadcastToCanvas };
 
-// Export function to get WebSocket server instance
-export function getWebSocketServer(): CanvasWebSocketServer {
-  if (!wsServer) {
-    throw new Error('WebSocket server not initialized');
-  }
-  return wsServer;
-}
+// --- Start the WebSocket server ---
+serve({
+  port,
+  hostname,
+  async fetch(req, server) {
+    const url = new URL(req.url);
 
-async function startServer() {
-  try {
-    console.log('🚀 Starting OpenPlace server...');
-    
-    // Prepare Next.js
-    await app.prepare();
-    console.log('✅ Next.js prepared');
+    // Handle WebSocket upgrade
+    if (url.pathname === "/ws") {
+      const canvasId = url.searchParams.get("canvasId");
+      const userId = url.searchParams.get("userId") || "anonymous";
 
-    // Create HTTP server
-    const server = createServer(async (req, res) => {
-      try {
-        // Add CORS headers for development
-        if (dev) {
-          res.setHeader('Access-Control-Allow-Origin', '*');
-          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-        }
-
-        const parsedUrl = parse(req.url!, true);
-        await handle(req, res, parsedUrl);
-      } catch (err) {
-        console.error('❌ Error handling request:', err);
-        res.statusCode = 500;
-        res.end('Internal server error');
+      if (!canvasId) {
+        return new Response("Missing canvasId parameter", { status: 400 });
       }
-    });
 
-    // Initialize WebSocket server
-    wsServer = new CanvasWebSocketServer(server);
-
-    // Start the server
-    server.listen(port, hostname, () => {
-      console.log(`🌟 Server ready on http://${hostname}:${port}`);
-      console.log(`🔌 WebSocket server ready on ws://${hostname}:${port}/ws`);
-      
-      if (dev) {
-        console.log('🔧 Development mode enabled');
-        setupDevWatcher();
-      }
-    });
-
-    // Graceful shutdown
-    const shutdown = () => {
-      console.log('🛑 Shutting down gracefully...');
-      wsServer?.close();
-      server.close(() => {
-        console.log('✅ Server closed');
-        process.exit(0);
+      const upgraded = server.upgrade(req, {
+        data: { canvasId, userId },
       });
-    };
 
-    process.on('SIGTERM', shutdown);
-    process.on('SIGINT', shutdown);
+      if (!upgraded) {
+        return new Response("WebSocket upgrade failed", { status: 400 });
+      }
+      return undefined; // Upgrade successful
+    }
 
-  } catch (error) {
-    console.error('❌ Failed to start server:', error);
-    process.exit(1);
-  }
-}
+    // Handle pixel broadcast
+    if (url.pathname === "/broadcast-pixel" && req.method === "POST") {
+      try {
+        const body = await req.json();
+        const { canvasId, pixel } = body;
+        if (canvasId && pixel) {
+          broadcastToCanvas(canvasId, {
+            type: "pixel_placed",
+            data: pixel,
+          });
+          return new Response("OK");
+        }
+        return new Response("Bad Request", { status: 400 });
+      } catch (error) {
+        console.error("❌ Error handling broadcast request:", error);
+        return new Response("Internal Server Error", { status: 500 });
+      }
+    }
 
-function setupDevWatcher() {
-  // Watch for changes in server files and WebSocket-related files
-  const watcher = chokidar.watch([
-    'server.ts',
-    'lib/websocket.ts',
-    'lib/db.ts'
-  ], {
-    ignored: /node_modules/,
-    persistent: true
-  });
+    // Health check endpoint
+    if (url.pathname === "/health") {
+      const totalConnections = Array.from(canvasConnections.values()).reduce(
+        (sum, connections) => sum + connections.size,
+        0
+      );
+      return new Response(
+        JSON.stringify({
+          status: "ok",
+          connections: totalConnections,
+          canvases: canvasConnections.size,
+        }),
+        { headers: { "Content-Type": "application/json" } }
+      );
+    }
 
-  let restartTimeout: NodeJS.Timeout;
+    // All other requests: 404
+    return new Response("Not found", { status: 404 });
+  },
 
-  watcher.on('change', (filePath) => {
-    console.log(`📝 File changed: ${filePath}`);
-    
-    // Debounce restarts
-    clearTimeout(restartTimeout);
-    restartTimeout = setTimeout(() => {
-      console.log('🔄 Restarting server due to file changes...');
-      
-      // Close WebSocket server
-      wsServer?.close();
-      
-      // Exit process - should be restarted by bun
-      process.exit(0);
-    }, 1000);
-  });
+  websocket: {
+    open(ws) {
+      ws.isAlive = true;
+      ws.lastPong = Date.now();
 
-  console.log('👀 Watching for file changes...');
-}
+      if (isDev) console.log("🔗 WebSocket connection opened");
 
-// Start the server
-if (require.main === module) {
-  startServer();
-}
+      // Auto-join if canvasId is present
+      if (ws.data?.canvasId) {
+        handleWebSocketMessage(
+          ws,
+          JSON.stringify({
+            type: "join_canvas",
+            canvasId: ws.data.canvasId,
+            userId: ws.data.userId,
+          })
+        );
+      }
+    },
+
+    message(ws, message) {
+      try {
+        handleWebSocketMessage(ws, message);
+      } catch (error) {
+        console.error("❌ Error in message handler:", error);
+      }
+    },
+
+    close(ws, code, reason) {
+      if (isDev) console.log(`🔌 WebSocket connection closed: ${code} ${reason}`);
+      removeClient(ws);
+    },
+
+    error(ws, error) {
+      console.error("❌ WebSocket error:", error);
+      removeClient(ws);
+    },
+  },
+});
+
+// Start heartbeat system
+startHeartbeat();
+
+console.log(
+  `🚀 WebSocket server running on ws://${hostname}:${port}/ws (${
+    isDev ? "dev" : "prod"
+  } mode)`
+);
