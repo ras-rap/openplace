@@ -6,6 +6,7 @@
     "dev": "bun run start.ts --dev",
     "build": "next build",
     "start": "bun start.ts",
+    "build:start": "bun run build && bun run start",
     "db:init": "bun pages/api/init-db.ts"
   },
   "dependencies": {
