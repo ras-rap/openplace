@@ -11,6 +11,11 @@ import {
 import React, { useState } from "react";
 import { OAuthProvider } from "appwrite";
 
+function isMobileOrIOS() {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
 export default function AuthModal({ forceOpen = false }: { forceOpen?: boolean }) {
   const {
     user,
@@ -25,6 +30,7 @@ export default function AuthModal({ forceOpen = false }: { forceOpen?: boolean }
   const [showGuestForm, setShowGuestForm] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [guestError, setGuestError] = useState("");
+  const mobileOauthDisabled = isMobileOrIOS();
 
   const handleGuestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,6 +117,7 @@ export default function AuthModal({ forceOpen = false }: { forceOpen?: boolean }
                 className="w-full flex items-center justify-center gap-2"
                 variant="outline"
                 onClick={() => loginWithProvider("discord" as OAuthProvider)}
+                disabled={mobileOauthDisabled}
               >
                 <IconBrandDiscord className="h-5 w-5" /> Sign in with Discord
               </Button>
@@ -118,9 +125,16 @@ export default function AuthModal({ forceOpen = false }: { forceOpen?: boolean }
                 className="w-full flex items-center justify-center gap-2"
                 variant="outline"
                 onClick={() => loginWithProvider("github" as OAuthProvider)}
+                disabled={mobileOauthDisabled}
               >
                 <IconBrandGithub className="h-5 w-5" /> Sign in with GitHub
               </Button>
+              {mobileOauthDisabled && (
+                <div className="text-red-600 text-center text-sm">
+                  OAuth sign-in does not work on iOS/Mobile browsers.<br />
+                  Please sign in as a guest.
+                </div>
+              )}
               <Separator />
               <Button
                 className="w-full flex items-center justify-center gap-2"

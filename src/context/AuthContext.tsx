@@ -51,9 +51,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loginWithProvider = (provider: import("appwrite").OAuthProvider) => {
-    const redirect = window.location.origin + "/auth-callback";
+  const redirect = window.location.origin + "/auth-callback";
+  // Detect mobile
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  if (isMobile) {
+    // Build the OAuth URL manually for mobile
+    const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT!.replace(/\/$/, "");
+    const project = process.env.NEXT_PUBLIC_APPWRITE_PROJECT!;
+    window.location.href = `${endpoint}/v1/account/sessions/oauth2/${provider}?project=${project}&success=${encodeURIComponent(redirect)}&failure=${encodeURIComponent(redirect)}`;
+  } else {
     account.createOAuth2Session(provider, redirect, redirect);
-  };
+  }
+};
 
   async function loginAnonymously(username?: string) {
   setLoading(true);
