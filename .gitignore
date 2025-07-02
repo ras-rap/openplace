@@ -10,6 +10,8 @@
 !.yarn/releases
 !.yarn/versions
 
+german.py
+
 # testing
 /coverage
 
