@@ -13,7 +13,7 @@ import { OAuthProvider } from "appwrite";
 
 function isMobileOrIOS() {
   if (typeof navigator === "undefined") return false;
-  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  return /iPhone|iPad|iPod|Android|Firefox/i.test(navigator.userAgent);
 }
 
 export default function AuthModal({ forceOpen = false }: { forceOpen?: boolean }) {
@@ -131,7 +131,7 @@ export default function AuthModal({ forceOpen = false }: { forceOpen?: boolean }
               </Button>
               {mobileOauthDisabled && (
                 <div className="text-red-600 text-center text-sm">
-                  OAuth sign-in does not work on iOS/Mobile browsers.<br />
+                  OAuth sign-in does not work on iOS/Mobile browsers and Firefox.<br />
                   Please sign in as a guest.
                 </div>
               )}
